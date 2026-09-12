@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-chronic}
+      POSTGRES_USER: ${DB_USER:-chronic}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-chronic}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # 数据库不发布到宿主端口，仅 compose 内部网络访问
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-chronic}
+      DB_USER: ${DB_USER:-chronic}
+      DB_PASSWORD: ${DB_PASSWORD:-chronic}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+    # 后端不直接发布到宿主，由前端 nginx 反代 /api
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${CC_PUBLISH_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  pgdata:

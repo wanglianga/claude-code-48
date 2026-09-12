@@ -1,0 +1,21 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: chronic-care
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:chronic}
+    username: ${DB_USER:chronic}
+    password: ${DB_PASSWORD:chronic}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+app:
+  # 首次启动时写入演示账号与演示数据（数据库已有用户则跳过）
+  seed-demo-data: ${SEED_DEMO_DATA:true}
