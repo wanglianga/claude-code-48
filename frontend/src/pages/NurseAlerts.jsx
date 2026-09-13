@@ -2,14 +2,20 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { L, alertLevelBadge, fmtTime, Empty } from '../components/common'
+import { NurseConfirmModal } from './doctor/detail/WarningTab'
 
 /** 告警任务中心（护士/医生）：处理连续漏服、血压异常、低血糖、不良反应、长期未上传。 */
 export default function NurseAlerts() {
   const [alerts, setAlerts] = useState([])
+  const [warnings, setWarnings] = useState([])
   const [status, setStatus] = useState('OPEN')
   const [error, setError] = useState('')
+  const [confirmTarget, setConfirmTarget] = useState(null)
 
-  const load = () => api.get(`/api/alerts?status=${status}`).then(setAlerts).catch(e => setError(e.message))
+  const load = () => {
+    api.get(`/api/alerts?status=${status}`).then(setAlerts).catch(e => setError(e.message))
+    api.get('/api/warnings?status=OPEN').then(setWarnings).catch(() => {})
+  }
   useEffect(load, [status])
 
   const handle = async (a, action) => {
@@ -25,6 +31,34 @@ export default function NurseAlerts() {
     <div>
       <div className="page-title">告警任务中心</div>
       <div className="page-sub">连续漏服 / 血压异常升高 / 低血糖 / 药物不良反应 / 长期未上传，推送至护士与医生处理</div>
+
+      {warnings.length > 0 && (
+        <div className="card" style={{ borderLeft: '4px solid var(--red)' }}>
+          <div className="card-title">⚠️ 连续高血压预警（待电话确认 {warnings.length}）</div>
+          {warnings.map(w => (
+            <div key={w.id} className="flex-between flex-wrap" style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ flex: 1 }}>
+                <div className="flex flex-wrap">
+                  {alertLevelBadge(w.level)}
+                  <Link to={`/records/${w.record.id}`}><b>{w.record.resident.name}</b></Link>
+                  <span className="muted" style={{ fontSize: 12 }}>{fmtTime(w.createdAt)}</span>
+                </div>
+                <div style={{ marginTop: 4 }}>{w.message}</div>
+                {w.suppAt && (
+                  <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                    居民已补充：测量时间 {w.suppMeasuredAt} · {w.tookMed ? '已服药' : '未服药'} ·
+                    症状：{w.symptoms || '无'} · {w.sawDoctor ? '已就医' : '未就医'}
+                  </div>
+                )}
+              </div>
+              <div className="flex">
+                <button className="btn btn-sm btn-warn" onClick={() => setConfirmTarget(w)}>📞 电话确认</button>
+                <Link className="btn btn-sm btn-outline" to={`/records/${w.record.id}?tab=warning`}>查看档案</Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="tabs">
         {[['OPEN', '待处理'], ['ACKED', '已知晓'], ['RESOLVED', '已办结'], ['ALL', '全部']].map(([k, label]) => (
@@ -55,6 +89,14 @@ export default function NurseAlerts() {
           </div>
         </div>
       ))}
+
+      {confirmTarget && (
+        <NurseConfirmModal
+          warning={confirmTarget}
+          onClose={() => setConfirmTarget(null)}
+          onDone={() => { setConfirmTarget(null); load() }}
+        />
+      )}
     </div>
   )
 }

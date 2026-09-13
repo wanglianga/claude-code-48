@@ -21,17 +21,19 @@ public class DashboardController {
     private final MedicationRepo medicationRepo;
     private final HealthUploadRepo uploadRepo;
     private final FamilyContactRepo contactRepo;
+    private final BpWarningRepo warningRepo;
     private final AuthService authService;
 
     public DashboardController(ChronicRecordRepo recordRepo, AlertRepo alertRepo, FollowUpPlanRepo planRepo,
                                MedicationRepo medicationRepo, HealthUploadRepo uploadRepo,
-                               FamilyContactRepo contactRepo, AuthService authService) {
+                               FamilyContactRepo contactRepo, BpWarningRepo warningRepo, AuthService authService) {
         this.recordRepo = recordRepo;
         this.alertRepo = alertRepo;
         this.planRepo = planRepo;
         this.medicationRepo = medicationRepo;
         this.uploadRepo = uploadRepo;
         this.contactRepo = contactRepo;
+        this.warningRepo = warningRepo;
         this.authService = authService;
     }
 
@@ -54,6 +56,9 @@ public class DashboardController {
         List<Alert> openAlerts = alertRepo.findByRecordDoctorIdAndStatusOrderByCreatedAtDesc(
                 doctor.id, Enums.AlertStatus.OPEN);
 
+        List<BpWarning> pendingWarnings = warningRepo.findByRecordDoctorIdAndStatusOrderByCreatedAtDesc(
+                doctor.id, Enums.WarningStatus.NURSE_CONFIRMED);
+
         List<FollowUpPlan> duePlans = planRepo.findByActiveTrueAndNextDueDateLessThanEqual(LocalDate.now())
                 .stream().filter(p -> myIds.contains(p.record.id)).toList();
 
@@ -68,18 +73,23 @@ public class DashboardController {
         m.put("keyFocusCount", mine.stream().filter(r -> r.manageLevel == Enums.ManageLevel.KEY_FOCUS).count());
         m.put("openAlertCount", openAlerts.size());
         m.put("duePlanCount", duePlans.size());
+        m.put("pendingWarningCount", pendingWarnings.size());
         m.put("levelDist", levelDist);
         m.put("recentAlerts", openAlerts.stream().limit(10).toList());
+        m.put("pendingWarnings", pendingWarnings.stream().limit(10).toList());
         m.put("duePlans", duePlans.stream().limit(10).toList());
         return m;
     }
 
     private Map<String, Object> nurseDashboard() {
         List<Alert> open = alertRepo.findByStatusOrderByCreatedAtDesc(Enums.AlertStatus.OPEN);
+        List<BpWarning> openWarnings = warningRepo.findByStatusOrderByCreatedAtDesc(Enums.WarningStatus.OPEN);
         Map<String, Object> m = new HashMap<>();
         m.put("role", "NURSE");
         m.put("openAlertCount", open.size());
+        m.put("openWarningCount", openWarnings.size());
         m.put("recentAlerts", open.stream().limit(20).toList());
+        m.put("openWarnings", openWarnings.stream().limit(20).toList());
         m.put("lostCount", recordRepo.countByStatus(Enums.RecordStatus.LOST));
         m.put("keyFocusCount", recordRepo.countByManageLevel(Enums.ManageLevel.KEY_FOCUS));
         return m;

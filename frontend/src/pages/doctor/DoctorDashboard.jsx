@@ -22,10 +22,31 @@ export default function DoctorDashboard() {
       <div className="stat-grid">
         <StatCard label="在管居民" value={data.activeRecords} color="blue" />
         <StatCard label="待处理告警" value={data.openAlertCount} color={data.openAlertCount > 0 ? 'red' : 'green'} />
+        <StatCard label="待处置高血压预警" value={data.pendingWarningCount} color={data.pendingWarningCount > 0 ? 'orange' : 'green'} />
         <StatCard label="到期随访" value={data.duePlanCount} color={data.duePlanCount > 0 ? 'orange' : 'green'} />
         <StatCard label="重点名单" value={data.keyFocusCount} color={data.keyFocusCount > 0 ? 'red' : ''} />
         <StatCard label="失访居民" value={data.lostCount} color={data.lostCount > 0 ? 'red' : ''} />
       </div>
+
+      {data.pendingWarnings.length > 0 && (
+        <div className="card" style={{ borderLeft: '4px solid var(--orange)' }}>
+          <div className="card-title">⚠️ 待处置连续高血压预警（护士已电话确认）</div>
+          {data.pendingWarnings.map(w => (
+            <div key={w.id} className="flex-between flex-wrap" style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+              <div>
+                <div className="flex">
+                  <Link to={`/records/${w.record.id}?tab=warning`}><b>{w.record.resident.name}</b></Link>
+                  <span className="muted" style={{ fontSize: 12 }}>最高 {w.maxSys}/{w.maxDia} mmHg · {fmtTime(w.createdAt)}</span>
+                </div>
+                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                  护士电话确认：症状 {w.nurseSymptoms || '无'} · 用药 {w.nurseMedNote || '不详'}
+                </div>
+              </div>
+              <Link className="btn btn-sm" to={`/records/${w.record.id}?tab=warning`}>去处置</Link>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid-2">
         <div className="card">

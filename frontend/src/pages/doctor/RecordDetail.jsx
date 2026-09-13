@@ -11,6 +11,7 @@ import FamilyTab from './detail/FamilyTab'
 import ReferralTab from './detail/ReferralTab'
 import StratifyPanel from './detail/StratifyPanel'
 import CausePanel from './detail/CausePanel'
+import WarningTab from './detail/WarningTab'
 
 export default function RecordDetail() {
   const { id } = useParams()
@@ -67,6 +68,7 @@ export default function RecordDetail() {
       <div className="tabs">
         {[
           ['trend', '📈 趋势与依从性'],
+          ['warning', `⚠️ 高血压预警 (${data.warnings.filter(w => w.status !== 'RESOLVED').length})`],
           ['med', '💊 用药管理'],
           ['alert', `🔔 告警 (${data.alerts.length})`],
           ['followup', `🩺 随访 (${data.followUps.length})`],
@@ -79,6 +81,7 @@ export default function RecordDetail() {
       </div>
 
       {tab === 'trend' && <TrendTab recordId={id} record={r} />}
+      {tab === 'warning' && <WarningTab recordId={id} warnings={data.warnings} followUps={data.followUps} onChanged={load} />}
       {tab === 'med' && <MedTab recordId={id} medications={data.medications} isDoctor={user?.role === 'DOCTOR'} onChanged={load} />}
       {tab === 'alert' && <AlertTab alerts={data.alerts} isStaff={isStaff} onChanged={load} />}
       {tab === 'followup' && <FollowUpTab recordId={id} followUps={data.followUps} plans={data.plans} isDoctor={user?.role === 'DOCTOR'} onChanged={load} />}

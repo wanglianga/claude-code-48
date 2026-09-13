@@ -2,13 +2,19 @@ import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import { L, diseaseBadge, levelBadge, fmtTime, fmtDate, Empty } from '../components/common'
 import UploadPanel from '../components/UploadPanel'
+import { SupplementModal } from './doctor/detail/WarningTab'
 
 /** 居民端：今日用药提醒、家庭数据上传、我的计划与历史记录。 */
 export default function ResidentHome() {
   const [data, setData] = useState(null)
+  const [warnings, setWarnings] = useState([])
+  const [suppTarget, setSuppTarget] = useState(null)
   const [error, setError] = useState('')
 
-  const load = () => api.get('/api/dashboard').then(setData).catch(e => setError(e.message))
+  const load = () => {
+    api.get('/api/dashboard').then(setData).catch(e => setError(e.message))
+    api.get('/api/warnings?status=OPEN').then(setWarnings).catch(() => {})
+  }
   useEffect(() => { load() }, [])
 
   if (error) return <div className="error-text">{error}</div>
@@ -27,6 +33,17 @@ export default function ResidentHome() {
     <div>
       <div className="page-title">我的健康</div>
       <div className="page-sub">每日测量、按时服药，数据会自动同步给您的家庭医生</div>
+
+      {warnings.filter(w => !w.suppAt).map(w => (
+        <div key={w.id} className="alert-banner alert-critical">
+          <div>
+            <b>⚠️ 连续高血压预警</b>
+            <div style={{ marginTop: 4 }}>{w.message}</div>
+            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>请补充测量时间、服药、症状和就医情况，社区护士将与您电话确认</div>
+          </div>
+          <button className="btn btn-sm" onClick={() => setSuppTarget(w)}>📝 补充信息</button>
+        </div>
+      ))}
 
       <div className="card">
         <div className="flex flex-wrap">
@@ -85,6 +102,14 @@ export default function ResidentHome() {
           </table>
         )}
       </div>
+
+      {suppTarget && (
+        <SupplementModal
+          warning={suppTarget}
+          onClose={() => setSuppTarget(null)}
+          onDone={() => { setSuppTarget(null); load() }}
+        />
+      )}
     </div>
   )
 }

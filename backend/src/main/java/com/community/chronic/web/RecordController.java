@@ -29,6 +29,7 @@ public class RecordController {
     private final RecordEventRepo eventRepo;
     private final HealthUploadRepo uploadRepo;
     private final AlertRepo alertRepo;
+    private final BpWarningRepo warningRepo;
     private final AuthService authService;
     private final EventLogger eventLogger;
     private final RuleEngine ruleEngine;
@@ -36,8 +37,8 @@ public class RecordController {
     public RecordController(ChronicRecordRepo recordRepo, UserAccountRepo userRepo, FamilyContactRepo contactRepo,
                             MedicationRepo medicationRepo, FollowUpPlanRepo planRepo, FollowUpRepo followUpRepo,
                             ReferralRepo referralRepo, HospitalizationRepo hospRepo, RecordEventRepo eventRepo,
-                            HealthUploadRepo uploadRepo, AlertRepo alertRepo, AuthService authService,
-                            EventLogger eventLogger, RuleEngine ruleEngine) {
+                            HealthUploadRepo uploadRepo, AlertRepo alertRepo, BpWarningRepo warningRepo,
+                            AuthService authService, EventLogger eventLogger, RuleEngine ruleEngine) {
         this.recordRepo = recordRepo;
         this.userRepo = userRepo;
         this.contactRepo = contactRepo;
@@ -49,6 +50,7 @@ public class RecordController {
         this.eventRepo = eventRepo;
         this.uploadRepo = uploadRepo;
         this.alertRepo = alertRepo;
+        this.warningRepo = warningRepo;
         this.authService = authService;
         this.eventLogger = eventLogger;
         this.ruleEngine = ruleEngine;
@@ -91,6 +93,7 @@ public class RecordController {
         m.put("hospitalizations", hospRepo.findByRecordIdOrderByStartDateDesc(id));
         m.put("events", eventRepo.findByRecordIdOrderByCreatedAtDesc(id));
         m.put("alerts", alertRepo.findByRecordIdOrderByCreatedAtDesc(id));
+        m.put("warnings", warningRepo.findByRecordIdOrderByCreatedAtDesc(id));
         m.put("suggestion", ruleEngine.suggestLevel(r));
         m.put("causes", ruleEngine.analyzeCauses(r));
         return m;

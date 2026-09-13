@@ -53,6 +53,12 @@ public final class Enums {
     /** 转诊状态 */
     public enum ReferralStatus { OPEN, COMPLETED }
 
+    /** 连续高血压预警状态：待补充/待电话确认 → 待医生处置 → 已办结 */
+    public enum WarningStatus { OPEN, NURSE_CONFIRMED, RESOLVED }
+
+    /** 医生对高血压预警的处置：调整随访提醒 / 建议门诊 / 联系家属 */
+    public enum DoctorAction { ADJUST_FOLLOWUP, CLINIC, CONTACT_FAMILY }
+
     /** 档案事件类型（事件流，所有关键变化都回到同一档案） */
     public enum EventType {
         CREATED,            // 建档

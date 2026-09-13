@@ -3,14 +3,20 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { L, diseaseBadge, levelBadge, statusBadge, alertLevelBadge, fmtTime, Empty } from '../components/common'
 import UploadPanel from '../components/UploadPanel'
+import { SupplementModal } from './doctor/detail/WarningTab'
 
 /** 家属端：代管居民、代测代报、接收告警。 */
 export default function FamilyHome() {
   const [data, setData] = useState(null)
+  const [warnings, setWarnings] = useState([])
+  const [suppTarget, setSuppTarget] = useState(null)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState(null)
 
-  const load = () => api.get('/api/dashboard').then(setData).catch(e => setError(e.message))
+  const load = () => {
+    api.get('/api/dashboard').then(setData).catch(e => setError(e.message))
+    api.get('/api/warnings?status=OPEN').then(setWarnings).catch(() => {})
+  }
   useEffect(() => { load() }, [])
 
   if (error) return <div className="error-text">{error}</div>
@@ -22,6 +28,17 @@ export default function FamilyHome() {
     <div>
       <div className="page-title">家人健康</div>
       <div className="page-sub">为家人代测血压血糖、代报用药情况，异常时您会收到提醒</div>
+
+      {warnings.filter(w => !w.suppAt).map(w => (
+        <div key={w.id} className="alert-banner alert-critical">
+          <div>
+            <b>⚠️ {w.record.resident.name} 连续高血压预警</b>
+            <div style={{ marginTop: 4 }}>{w.message}</div>
+            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>请代家人补充测量时间、服药、症状和就医情况</div>
+          </div>
+          <button className="btn btn-sm" onClick={() => setSuppTarget(w)}>📝 代填补充信息</button>
+        </div>
+      ))}
 
       {data.records.length === 0 ? (
         <div className="card"><Empty text="您还没有关联的家人档案，请联系社区医生将您登记为家属联系人。" /></div>
@@ -76,6 +93,14 @@ export default function FamilyHome() {
           </div>
         ))}
       </div>
+
+      {suppTarget && (
+        <SupplementModal
+          warning={suppTarget}
+          onClose={() => setSuppTarget(null)}
+          onDone={() => { setSuppTarget(null); load() }}
+        />
+      )}
     </div>
   )
 }

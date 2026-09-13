@@ -40,16 +40,21 @@ public class RuleEngine {
     private final ChronicRecordRepo recordRepo;
     private final MedicationRepo medicationRepo;
     private final FamilyContactRepo contactRepo;
+    private final BpWarningRepo warningRepo;
+    private final FollowUpPlanRepo planRepo;
     private final EventLogger eventLogger;
 
     public RuleEngine(HealthUploadRepo uploadRepo, AlertRepo alertRepo, ChronicRecordRepo recordRepo,
-                      MedicationRepo medicationRepo, FamilyContactRepo contactRepo, EventLogger eventLogger) {
+                      MedicationRepo medicationRepo, FamilyContactRepo contactRepo, EventLogger eventLogger,
+                      BpWarningRepo warningRepo, FollowUpPlanRepo planRepo) {
         this.uploadRepo = uploadRepo;
         this.alertRepo = alertRepo;
         this.recordRepo = recordRepo;
         this.medicationRepo = medicationRepo;
         this.contactRepo = contactRepo;
         this.eventLogger = eventLogger;
+        this.warningRepo = warningRepo;
+        this.planRepo = planRepo;
     }
 
     // ---------------- 上传即评估 ----------------
@@ -71,6 +76,8 @@ public class RuleEngine {
             raiseAlert(r, Enums.AlertType.BP_HIGH, Enums.AlertLevel.CRITICAL,
                     String.format("血压严重升高 %d/%d mmHg（≥%d/%d 危急值），请立即处置",
                             u.sys, u.dia, BP_CRISIS_SYS, BP_CRISIS_DIA));
+            raiseBpWarning(r, Enums.AlertLevel.CRITICAL, 1, u.sys, u.dia,
+                    String.format("血压达危急值 %d/%d mmHg，已生成连续高血压预警", u.sys, u.dia));
             return;
         }
         boolean over = u.sys > r.targetSys || u.dia > r.targetDia;
@@ -84,7 +91,63 @@ public class RuleEngine {
                 raiseAlert(r, Enums.AlertType.BP_HIGH, Enums.AlertLevel.WARN,
                         String.format("连续 %d 次家庭血压超过目标值（%d/%d，目标 <%d/%d mmHg）",
                                 BP_OVER_THRESHOLD, u.sys, u.dia, r.targetSys, r.targetDia));
+                int maxSys = recent.stream().mapToInt(x -> x.sys).max().orElse(u.sys);
+                int maxDia = recent.stream().mapToInt(x -> x.dia).max().orElse(u.dia);
+                raiseBpWarning(r, Enums.AlertLevel.WARN, BP_OVER_THRESHOLD, maxSys, maxDia,
+                        String.format("连续 %d 次家庭血压超标（最高 %d/%d mmHg，目标 <%d/%d），"
+                                + "请居民/家属补充测量时间、服药、症状与就医情况",
+                                BP_OVER_THRESHOLD, maxSys, maxDia, r.targetSys, r.targetDia));
             }
+        }
+    }
+
+    /**
+     * 连续高血压预警：存在未办结预警时不重复创建；
+     * 但已有 WARN 预警期间出现危急值时，将现有预警升级为 CRITICAL。
+     * 生成预警的同时自动生成电话随访任务（提前到明天）。
+     */
+    private void raiseBpWarning(ChronicRecord r, Enums.AlertLevel level, int triggerCount,
+                                int maxSys, int maxDia, String message) {
+        BpWarning existing = warningRepo.findFirstByRecordIdAndStatusInOrderByCreatedAtDesc(r.id,
+                List.of(Enums.WarningStatus.OPEN, Enums.WarningStatus.NURSE_CONFIRMED)).orElse(null);
+        if (existing != null) {
+            if (level == Enums.AlertLevel.CRITICAL && existing.level != Enums.AlertLevel.CRITICAL) {
+                existing.level = Enums.AlertLevel.CRITICAL;
+                existing.message = message;
+                existing.maxSys = maxSys;
+                existing.maxDia = maxDia;
+                warningRepo.save(existing);
+                eventLogger.log(r, Enums.EventType.ALERT, "【连续高血压预警·升级】" + message, "系统");
+            }
+            return;
+        }
+        BpWarning w = new BpWarning();
+        w.record = r;
+        w.level = level;
+        w.triggerCount = triggerCount;
+        w.maxSys = maxSys;
+        w.maxDia = maxDia;
+        w.message = message;
+        warningRepo.save(w);
+        eventLogger.log(r, Enums.EventType.ALERT, "【连续高血压预警】" + message + "，已生成电话随访任务", "系统");
+        createPhoneFollowUpTask(r);
+    }
+
+    /** 高血压预警生成电话随访任务：已有计划则提前到明天，没有则新建电话随访计划。 */
+    private void createPhoneFollowUpTask(ChronicRecord r) {
+        java.time.LocalDate tomorrow = java.time.LocalDate.now().plusDays(1);
+        FollowUpPlan p = planRepo.findFirstByRecordIdAndActiveTrue(r.id).orElse(null);
+        if (p == null) {
+            p = new FollowUpPlan();
+            p.record = r;
+            p.planType = Enums.PlanType.PHONE;
+            p.intervalDays = 7;
+            p.nextDueDate = tomorrow;
+            planRepo.save(p);
+        } else if (p.nextDueDate == null || p.nextDueDate.isAfter(tomorrow)) {
+            p.planType = Enums.PlanType.PHONE;
+            p.nextDueDate = tomorrow;
+            planRepo.save(p);
         }
     }
 

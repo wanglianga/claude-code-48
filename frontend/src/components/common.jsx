@@ -22,6 +22,8 @@ export const L = {
     LOST: '失访', REFERRAL: '转诊', LEVEL_CHANGE: '分层调整', FOLLOW_UP: '随访', ALERT: '告警',
   },
   referralStatus: { OPEN: '转诊中', COMPLETED: '已回填结果' },
+  warningStatus: { OPEN: '待电话确认', NURSE_CONFIRMED: '待医生处置', RESOLVED: '已办结' },
+  doctorAction: { ADJUST_FOLLOWUP: '调整随访提醒', CLINIC: '建议门诊', CONTACT_FAMILY: '联系家属' },
 }
 
 export function levelBadge(level) {
