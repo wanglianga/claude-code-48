@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-router-dom'
 import { getUser, clearSession, api } from './api'
 import Login from './pages/Login'
@@ -133,13 +133,24 @@ function FamilyRoutes() {
 }
 
 export default function App() {
-  const user = getUser()
+  // 会话必须是响应式的：登录/退出/切换角色后立即重渲染路由，
+  // 否则会沿用切换前角色（白屏/错落地/误提示无档案）。
+  const [user, setUser] = useState(getUser())
+  useEffect(() => {
+    const sync = () => setUser(getUser())
+    window.addEventListener('auth-changed', sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener('auth-changed', sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Home />} />
       <Route path="/*" element={
-        !user ? <Navigate to="/login" /> :
+        !user ? <Navigate to="/login" replace /> :
         user.role === 'DOCTOR' ? <DoctorRoutes /> :
         user.role === 'NURSE' ? <NurseRoutes /> :
         user.role === 'RESIDENT' ? <ResidentRoutes /> :

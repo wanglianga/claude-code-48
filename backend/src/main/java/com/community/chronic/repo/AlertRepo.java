@@ -14,4 +14,5 @@ public interface AlertRepo extends JpaRepository<Alert, Long> {
     boolean existsByRecordIdAndAlertTypeAndLevelAndStatus(Long recordId, Enums.AlertType type, Enums.AlertLevel level, Enums.AlertStatus status);
     long countByStatus(Enums.AlertStatus status);
     long countByRecordIdAndCreatedAtAfter(Long recordId, java.time.LocalDateTime after);
+    long countByRecordIdAndAlertTypeAndCreatedAtAfter(Long recordId, Enums.AlertType type, java.time.LocalDateTime after);
 }

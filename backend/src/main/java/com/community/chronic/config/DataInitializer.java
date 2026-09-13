@@ -112,8 +112,8 @@ public class DataInitializer implements CommandLineRunner {
             boolean byFamily = i % 4 == 0; // 儿子每周代测
             upload(r1, byFamily ? zhangSon : zhang, byFamily ? Enums.UploaderType.FAMILY : Enums.UploaderType.SELF,
                     Enums.UploadType.BP, sys, dia, 68 + rnd.nextInt(10), null, null, null, null, null, null, t);
-            // 用药打卡：近 3 天连续漏服（触发连续漏服告警）
-            boolean missed = i < 3;
+            // 用药打卡：近 3 天连续漏服（触发告警）+ 每周约 1 次漏服（依从性降至 80% 以下，演示依从性归因）
+            boolean missed = i < 3 || i % 7 == 3;
             upload(r1, zhang, Enums.UploaderType.SELF, Enums.UploadType.MEDICATION, null, null, null, null,
                     "苯磺酸氨氯地平", missed ? Enums.MedLogStatus.MISSED : Enums.MedLogStatus.TAKEN,
                     null, null, missed ? "早上忘记服药" : null, t.plusMinutes(10));

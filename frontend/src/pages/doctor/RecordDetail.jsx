@@ -10,6 +10,7 @@ import EventTab from './detail/EventTab'
 import FamilyTab from './detail/FamilyTab'
 import ReferralTab from './detail/ReferralTab'
 import StratifyPanel from './detail/StratifyPanel'
+import CausePanel from './detail/CausePanel'
 
 export default function RecordDetail() {
   const { id } = useParams()
@@ -59,6 +60,9 @@ export default function RecordDetail() {
 
       {/* 分层建议（仅医护可见） */}
       {isStaff && <StratifyPanel record={r} suggestion={data.suggestion} onChanged={load} />}
+
+      {/* 异常原因判断：疾病变化 / 用药依从性 / 家属照护缺口（仅医护可见） */}
+      {isStaff && <CausePanel causes={data.causes} />}
 
       <div className="tabs">
         {[

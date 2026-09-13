@@ -92,6 +92,7 @@ public class RecordController {
         m.put("events", eventRepo.findByRecordIdOrderByCreatedAtDesc(id));
         m.put("alerts", alertRepo.findByRecordIdOrderByCreatedAtDesc(id));
         m.put("suggestion", ruleEngine.suggestLevel(r));
+        m.put("causes", ruleEngine.analyzeCauses(r));
         return m;
     }
 

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -220,5 +221,103 @@ public class RuleEngine {
         m.put("uploads30d", uploads);
         m.put("hasProxy", hasProxy);
         return m;
+    }
+
+    // ---------------- 异常归因：疾病变化 / 用药依从性 / 家属照护缺口 ----------------
+
+    /**
+     * 对近 30 天数据做归因判断，三类结论均附可核验依据（具体次数/比率/告警条数），
+     * 帮助社区医生分辨异常来自疾病变化、用药依从性还是家属照护缺口。
+     */
+    public List<Map<String, Object>> analyzeCauses(ChronicRecord r) {
+        LocalDateTime since = LocalDateTime.now().minusDays(30);
+        List<HealthUpload> recent = uploadRepo.findByRecordIdAndMeasuredAtAfterOrderByMeasuredAtDesc(r.id, since);
+
+        long taken = recent.stream().filter(u -> u.type == Enums.UploadType.MEDICATION
+                && u.medStatus == Enums.MedLogStatus.TAKEN).count();
+        long missed = recent.stream().filter(u -> u.type == Enums.UploadType.MEDICATION
+                && u.medStatus == Enums.MedLogStatus.MISSED).count();
+        long medLogs = taken + missed;
+        double adherence = medLogs == 0 ? 1.0 : (double) taken / medLogs;
+        int adherencePct = (int) Math.round(adherence * 100);
+
+        List<HealthUpload> bps = recent.stream()
+                .filter(u -> u.type == Enums.UploadType.BP && u.sys != null && u.dia != null).toList();
+        long bpOver = bps.stream().filter(u -> u.sys > r.targetSys || u.dia > r.targetDia).count();
+        long crisis = bps.stream().filter(u -> u.sys >= BP_CRISIS_SYS || u.dia >= BP_CRISIS_DIA).count();
+        long lowGlu = recent.stream().filter(u -> u.type == Enums.UploadType.GLUCOSE
+                && u.glucose != null && u.glucose < GLUCOSE_LOW).count();
+        long familyUploads = recent.stream().filter(u -> u.uploaderType == Enums.UploaderType.FAMILY).count();
+
+        boolean hasProxy = contactRepo.findByRecordId(r.id).stream().anyMatch(c -> c.proxy);
+        long missedMedAlerts = alertRepo.countByRecordIdAndAlertTypeAndCreatedAtAfter(
+                r.id, Enums.AlertType.MISSED_MED, since);
+        long noUploadAlerts = alertRepo.countByRecordIdAndAlertTypeAndCreatedAtAfter(
+                r.id, Enums.AlertType.NO_UPLOAD, since);
+
+        List<Map<String, Object>> causes = new ArrayList<>();
+
+        // 1) 疾病变化：依从性良好、监测规律的前提下指标仍失控，才归因于疾病本身
+        List<String> diseaseEv = new ArrayList<>();
+        boolean adherencePoor = medLogs >= 3 && adherence < 0.8;
+        boolean disease = !adherencePoor && (bpOver >= 3 || crisis > 0 || lowGlu > 0);
+        if (adherencePoor) {
+            diseaseEv.add(String.format("用药依从性仅 %d%%，指标异常更可能源于漏服药物，需先纠正依从性再评估疾病变化", adherencePct));
+        }
+        diseaseEv.add(bpOver > 0
+                ? String.format("近30天家庭血压超标 %d/%d 次（目标 <%d/%d mmHg）", bpOver, bps.size(), r.targetSys, r.targetDia)
+                : String.format("近30天家庭血压超标 0/%d 次（目标 <%d/%d mmHg）", bps.size(), r.targetSys, r.targetDia));
+        if (crisis > 0) diseaseEv.add(String.format("出现危急值 %d 次（≥%d/%d mmHg）", crisis, BP_CRISIS_SYS, BP_CRISIS_DIA));
+        if (lowGlu > 0) diseaseEv.add(String.format("低血糖 %d 次（<%.1f mmol/L）", lowGlu, GLUCOSE_LOW));
+        if (medLogs >= 3) {
+            diseaseEv.add(String.format("同期按时服药率 %d%%，%s", adherencePct,
+                    adherence >= 0.8 ? "可排除漏服因素" : "无法排除漏服因素"));
+        }
+        if (bps.isEmpty() && lowGlu == 0) diseaseEv.add("近30天无血压/血糖记录，无法评估疾病变化");
+        causes.add(cause("DISEASE", "疾病变化", disease, diseaseEv));
+
+        // 2) 用药依从性
+        List<String> adEv = new ArrayList<>();
+        boolean adIssue = medLogs >= 3 && adherence < 0.8;
+        if (medLogs == 0) {
+            adEv.add("近30天无用药打卡记录，无法评估（本身即监测缺口）");
+        } else {
+            adEv.add(String.format("近30天用药打卡 %d 次：已服 %d 次、漏服 %d 次，按时服药率 %d%%（警戒线 80%%）",
+                    medLogs, taken, missed, adherencePct));
+        }
+        adEv.add(String.format("连续漏服告警 %d 条", missedMedAlerts));
+        causes.add(cause("ADHERENCE", "用药依从性", adIssue, adEv));
+
+        // 3) 家属照护缺口
+        List<String> careEv = new ArrayList<>();
+        boolean careGap = (!hasProxy && r.familySupport != Enums.FamilySupport.STRONG)
+                || recent.size() < 8
+                || noUploadAlerts > 0
+                || (hasProxy && familyUploads == 0);
+        careEv.add(String.format("家庭支持程度「%s」，%s", familySupportLabel(r.familySupport),
+                hasProxy ? "已设代管家属" : "未设代管家属"));
+        careEv.add(String.format("近30天家庭监测上传 %d 次（建议 ≥8 次），其中家属代测 %d 次", recent.size(), familyUploads));
+        if (noUploadAlerts > 0) careEv.add(String.format("长期未上传告警 %d 条", noUploadAlerts));
+        if (hasProxy && familyUploads == 0) careEv.add("代管家属近30天未代测，代管未落实");
+        causes.add(cause("CARE_GAP", "家属照护缺口", careGap, careEv));
+
+        return causes;
+    }
+
+    private Map<String, Object> cause(String type, String label, boolean detected, List<String> evidence) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("type", type);
+        m.put("label", label);
+        m.put("detected", detected);
+        m.put("evidence", evidence);
+        return m;
+    }
+
+    private static String familySupportLabel(Enums.FamilySupport f) {
+        return switch (f) {
+            case STRONG -> "强";
+            case MODERATE -> "中";
+            case WEAK -> "弱";
+        };
     }
 }

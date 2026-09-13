@@ -106,10 +106,10 @@ export default function TrendTab({ recordId, record }) {
               <div className="muted" style={{ fontSize: 11 }}>平均血压 mmHg</div>
             </div>
           </div>
-          {diff.selfAvgSys != null && diff.famAvgSys != null && (
+          {diff.selfAvgSys != null && diff.familyAvgSys != null && (
             <div className="mt muted" style={{ fontSize: 12 }}>
-              收缩压均值差 {Math.abs(diff.selfAvgSys - diff.famAvgSys)} mmHg
-              {Math.abs(diff.selfAvgSys - diff.famAvgSys) >= 10
+              收缩压均值差 {Math.abs(diff.selfAvgSys - diff.familyAvgSys)} mmHg
+              {Math.abs(diff.selfAvgSys - diff.familyAvgSys) >= 10
                 ? '，差异较大，需关注测量方式或照护质量'
                 : '，差异在合理范围'}
             </div>

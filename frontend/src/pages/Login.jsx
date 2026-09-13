@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { api, setSession } from '../api'
+import { useNavigate, Navigate } from 'react-router-dom'
+import { api, setSession, getUser } from '../api'
 
 export default function Login() {
   const [username, setUsername] = useState('doctor')
@@ -9,6 +9,9 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
+  // 已登录用户直接回首页，避免停留在登录页
+  if (getUser()) return <Navigate to="/" replace />
+
   const submit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -16,7 +19,7 @@ export default function Login() {
     try {
       const data = await api.post('/api/auth/login', { username, password })
       setSession(data.token, data.user)
-      navigate('/')
+      navigate('/', { replace: true })
     } catch (err) {
       setError(err.message)
     } finally {

@@ -9,10 +9,12 @@ export function getUser() {
 export function setSession(token, user) {
   localStorage.setItem(TOKEN_KEY, token)
   localStorage.setItem(USER_KEY, JSON.stringify(user))
+  window.dispatchEvent(new Event('auth-changed'))
 }
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
+  window.dispatchEvent(new Event('auth-changed'))
 }
 
 async function request(path, options = {}) {
@@ -23,7 +25,8 @@ async function request(path, options = {}) {
   if (!resp.ok) {
     let msg = `请求失败 (${resp.status})`
     try { msg = (await resp.json()).error || msg } catch { /* ignore */ }
-    if (resp.status === 401) { clearSession(); window.location.href = '/login' }
+    // 401 时清除会话，由 App 的 auth-changed 监听响应式跳回登录页（无需整页刷新）
+    if (resp.status === 401) clearSession()
     throw new Error(msg)
   }
   return resp.json()
